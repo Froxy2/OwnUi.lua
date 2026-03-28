@@ -13,54 +13,34 @@ local VentyLib = {
     IsListening = false 
 }
 
--- // Hilfsfunktion für Dragging (Damit man die UI verschieben kann)
-local function MakeDraggable(gui)
-    local dragging, dragInput, dragStart, startPos
-    gui.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = gui.Position
-        end
-    end)
-    gui.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-end
-
 -- // Create Window Funktion
 function VentyLib:CreateWindow(Config)
     local WindowName = Config.Name or "Venty UI"
     local UserTrans = Config.BackgroundTransparency or 0
     local ActualTrans = math.clamp(UserTrans, 0, 1)
 
+    -- UI Container
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "VentyLib_UI"
+    -- Nutzt CoreGui (für Exploits unsichtbar im PlayerGui) oder PlayerGui (für Studio)
     ScreenGui.Parent = (RunService:IsStudio() and game.Players.LocalPlayer:WaitForChild("PlayerGui") or game:GetService("CoreGui"))
     ScreenGui.ResetOnSpawn = false
     self.Gui = ScreenGui
 
+    -- Main Frame (Fest oben links)
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainFrame"
     MainFrame.Size = UDim2.new(0, 350, 0, 450) 
-    MainFrame.Position = UDim2.new(0.5, -175, 0.5, -225) 
+    -- Position: Oben links mit 20 Pixel Abstand (Kein Dragging)
+    MainFrame.Position = UDim2.new(0, 20, 0, 20) 
     MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     MainFrame.BackgroundTransparency = ActualTrans
     MainFrame.BorderSizePixel = 0
     MainFrame.ClipsDescendants = true
     MainFrame.Parent = ScreenGui
     self.MainFrame = MainFrame
-    
-    MakeDraggable(MainFrame)
 
+    -- Styling
     Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
     local Stroke = Instance.new("UIStroke", MainFrame)
     Stroke.Thickness = 1
@@ -129,7 +109,7 @@ function VentyLib:CreateWindow(Config)
     ContainerHolder.Parent = MainFrame
     Instance.new("UIPadding", ContainerHolder).PaddingLeft = UDim.new(0, 15)
 
-    -- // MINIMIZE LOGIK // --
+    -- Minimize Logik
     local IsMinimized = false
     local FullSize = UDim2.new(0, 350, 0, 450)
     local MinSize = UDim2.new(0, 350, 0, 35)
@@ -137,7 +117,6 @@ function VentyLib:CreateWindow(Config)
     MinButton.MouseButton1Click:Connect(function()
         IsMinimized = not IsMinimized
         MinButton.Text = IsMinimized and "+" or "-"
-        
         local TargetSize = IsMinimized and MinSize or FullSize
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = TargetSize}):Play()
 
@@ -153,7 +132,7 @@ function VentyLib:CreateWindow(Config)
         end
     end)
 
-    -- Global Toggle Logik (F1)
+    -- Toggle GUI Visibility (F1)
     UserInputService.InputBegan:Connect(function(input, gp)
         if not gp and not self.IsListening and self.OpenBind and input.KeyCode == self.OpenBind then
             self.Visible = not self.Visible
@@ -161,6 +140,7 @@ function VentyLib:CreateWindow(Config)
         end
     end)
 
+    -- // FUNCTIONS // --
     function self:AddBanner(BConfig)
         BannerContainer.Size = UDim2.new(1, 0, 0, 65)
         local BannerImg = Instance.new("ImageLabel")
@@ -205,40 +185,12 @@ function VentyLib:CreateWindow(Config)
         Indicator.BackgroundTransparency = 1
         Indicator.Parent = TabBtn
 
-        local TabData = {Button = TabBtn, Container = Container, Indicator = Indicator}
-        table.insert(VentyLib.Tabs, TabData)
+        table.insert(VentyLib.Tabs, {Button = TabBtn, Container = Container, Indicator = Indicator})
         local tabIndex = #VentyLib.Tabs
-        
-        TabBtn.MouseButton1Click:Connect(function() 
-            VentyLib:SelectTab(tabIndex) 
-        end)
+        TabBtn.MouseButton1Click:Connect(function() VentyLib:SelectTab(tabIndex) end)
 
         local TabFunctions = {}
         
-        function TabFunctions:AddSection(SConfig)
-            local SectionFrame = Instance.new("Frame")
-            SectionFrame.Size = UDim2.new(1, 0, 0, 25)
-            SectionFrame.BackgroundTransparency = 1
-            SectionFrame.Parent = Container
-            local AccentBar = Instance.new("Frame")
-            AccentBar.Size = UDim2.new(0, 2, 0, 14)
-            AccentBar.Position = UDim2.new(0, 0, 0.5, -7)
-            AccentBar.BackgroundColor3 = SConfig.Color or Color3.fromRGB(255, 255, 255)
-            AccentBar.BorderSizePixel = 0
-            AccentBar.Parent = SectionFrame
-            local SectionLabel = Instance.new("TextLabel")
-            SectionLabel.Size = UDim2.new(1, -20, 1, 0)
-            SectionLabel.Position = UDim2.new(0, 10, 0, 0)
-            SectionLabel.BackgroundTransparency = 1
-            SectionLabel.Text = SConfig.Name:upper()
-            SectionLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-            SectionLabel.Font = Enum.Font.GothamBold
-            SectionLabel.TextSize = 10
-            SectionLabel.TextXAlignment = Enum.TextXAlignment.Left
-            SectionLabel.Parent = SectionFrame
-            return TabFunctions
-        end
-
         function TabFunctions:AddToggle(TConfig)
             local Toggled = TConfig.Default or false
             local ToggleColor = TConfig.Color or Color3.fromRGB(76, 217, 100)
@@ -346,13 +298,9 @@ function VentyLib:CreateWindow(Config)
             return TabFunctions
         end
 
-        -- Auto-Select first Tab
         if #VentyLib.Tabs == 1 then
-            task.spawn(function()
-                VentyLib:SelectTab(1)
-            end)
+            task.spawn(function() VentyLib:SelectTab(1) end)
         end
-
         return TabFunctions
     end
 
@@ -373,5 +321,5 @@ function VentyLib:SelectTab(index)
     end
 end
 
--- // DAS HIER IST DER WICHTIGSTE TEIL // --
+-- // RÜCKGABE FÜR LOADSTRING // --
 return VentyLib
