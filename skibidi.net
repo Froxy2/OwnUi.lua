@@ -1,0 +1,430 @@
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- // Library Objekt
+local VentyLib = {
+    Tabs = {},
+    CurrentTabIndex = 0,
+    Gui = nil,
+    MainFrame = nil,
+    Visible = true,
+    OpenBind = Enum.KeyCode.F1, 
+    IsListening = false 
+}
+
+-- // Create Window Funktion
+function VentyLib:CreateWindow(Config)
+    local WindowName = Config.Name or "Venty UI"
+    local UserTrans = Config.BackgroundTransparency or 1
+    local ActualTrans = 1 - math.clamp(UserTrans, 0, 1)
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "VentyLib_UI"
+    ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    ScreenGui.ResetOnSpawn = false
+    self.Gui = ScreenGui
+
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, 350, 0, 450) 
+    MainFrame.Position = UDim2.new(0, 10, 0, 40) 
+    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    MainFrame.BackgroundTransparency = ActualTrans
+    MainFrame.BorderSizePixel = 0
+    MainFrame.ClipsDescendants = true -- Wichtig für das Minimieren!
+    MainFrame.Parent = ScreenGui
+    self.MainFrame = MainFrame
+
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+    local Stroke = Instance.new("UIStroke", MainFrame)
+    Stroke.Thickness = 1
+    Stroke.Color = Color3.fromRGB(40, 40, 40)
+    Stroke.Transparency = ActualTrans
+
+    local HeaderLayout = Instance.new("UIListLayout", MainFrame)
+    HeaderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    HeaderLayout.Padding = UDim.new(0, 8)
+
+    -- // TITEL BEREICH // --
+    local TitleFrame = Instance.new("Frame")
+    TitleFrame.Size = UDim2.new(1, 0, 0, 35)
+    TitleFrame.BackgroundTransparency = 1
+    TitleFrame.LayoutOrder = 1
+    TitleFrame.Parent = MainFrame
+
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Size = UDim2.new(1, -60, 1, 0)
+    TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Text = WindowName
+    TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TitleLabel.Font = Enum.Font.GothamBold
+    TitleLabel.TextSize = 14
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.Parent = TitleFrame
+
+    -- // MINIMIZE BUTTON // --
+    local MinButton = Instance.new("TextButton")
+    MinButton.Name = "MinButton"
+    MinButton.Size = UDim2.new(0, 25, 0, 25)
+    MinButton.Position = UDim2.new(1, -35, 0.5, -12)
+    MinButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    MinButton.Text = "-"
+    MinButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MinButton.Font = Enum.Font.GothamBold
+    MinButton.TextSize = 18
+    MinButton.Parent = TitleFrame
+    Instance.new("UICorner", MinButton).CornerRadius = UDim.new(0, 4)
+
+    -- // BANNER CONTAINER // --
+    local BannerContainer = Instance.new("Frame")
+    BannerContainer.Size = UDim2.new(1, 0, 0, 0)
+    BannerContainer.BackgroundTransparency = 1
+    BannerContainer.LayoutOrder = 2
+    BannerContainer.Parent = MainFrame
+
+    -- // TAB HOLDER // --
+    local TabHolder = Instance.new("Frame")
+    TabHolder.Size = UDim2.new(1, 0, 0, 35)
+    TabHolder.BackgroundTransparency = 1
+    TabHolder.LayoutOrder = 3
+    TabHolder.Parent = MainFrame
+    local TabListLayout = Instance.new("UIListLayout", TabHolder)
+    TabListLayout.FillDirection = Enum.FillDirection.Horizontal
+    TabListLayout.Padding = UDim.new(0, 15)
+    TabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    Instance.new("UIPadding", TabHolder).PaddingLeft = UDim.new(0, 15)
+
+    -- // CONTENT AREA // --
+    local ContainerHolder = Instance.new("Frame")
+    ContainerHolder.Size = UDim2.new(1, -20, 1, -130)
+    ContainerHolder.BackgroundTransparency = 1
+    ContainerHolder.LayoutOrder = 4
+    ContainerHolder.Parent = MainFrame
+    Instance.new("UIPadding", ContainerHolder).PaddingLeft = UDim.new(0, 15)
+
+    -- // MINIMIZE LOGIK // --
+    local IsMinimized = false
+    local FullSize = UDim2.new(0, 350, 0, 450)
+    local MinSize = UDim2.new(0, 350, 0, 35)
+
+    MinButton.MouseButton1Click:Connect(function()
+        IsMinimized = not IsMinimized
+        MinButton.Text = IsMinimized and "+" or "-"
+        
+        local TargetSize = IsMinimized and MinSize or FullSize
+        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = TargetSize}):Play()
+
+        if IsMinimized then
+            -- Verstecke Inhalt sofort beim Minimieren
+            BannerContainer.Visible = false
+            TabHolder.Visible = false
+            ContainerHolder.Visible = false
+        else
+            -- Zeige Inhalt erst kurz nach Start der Animation
+            task.wait(0.1)
+            BannerContainer.Visible = true
+            TabHolder.Visible = true
+            ContainerHolder.Visible = true
+        end
+    end)
+
+    -- Global Toggle Logik (F1)
+    UserInputService.InputBegan:Connect(function(input, gp)
+        if not gp and not self.IsListening and self.OpenBind and input.KeyCode == self.OpenBind then
+            self.Visible = not self.Visible
+            MainFrame.Visible = self.Visible
+        end
+    end)
+
+    function self:AddBanner(BConfig)
+        BannerContainer.Size = UDim2.new(1, 0, 0, 65)
+        local BannerImg = Instance.new("ImageLabel")
+        BannerImg.Size = UDim2.new(1, -30, 1, 0)
+        BannerImg.Position = UDim2.new(0, 15, 0, 0)
+        BannerImg.BackgroundTransparency = 1
+        BannerImg.Image = BConfig.Icon
+        BannerImg.ScaleType = Enum.ScaleType.Fit
+        BannerImg.Parent = BannerContainer
+    end
+
+    function self:AddTab(TConfig)
+        local TabColor = TConfig.Color or Color3.fromRGB(255, 255, 255)
+        local Container = Instance.new("ScrollingFrame")
+        Container.Size = UDim2.new(1, 0, 1, 0)
+        Container.BackgroundTransparency = 1
+        Container.Visible = false
+        Container.BorderSizePixel = 0
+        Container.ScrollBarThickness = 0
+        Container.Parent = ContainerHolder
+
+        local UIList = Instance.new("UIListLayout", Container)
+        UIList.Padding = UDim.new(0, 6)
+        UIList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            Container.CanvasSize = UDim2.new(0, 0, 0, UIList.AbsoluteContentSize.Y + 10)
+        end)
+
+        local TabBtn = Instance.new("TextButton")
+        TabBtn.Size = UDim2.new(0, 65, 1, 0)
+        TabBtn.BackgroundTransparency = 1
+        TabBtn.Text = TConfig.Name
+        TabBtn.Font = Enum.Font.GothamBold
+        TabBtn.TextSize = 13
+        TabBtn.TextColor3 = Color3.fromRGB(130, 130, 130)
+        TabBtn.Parent = TabHolder
+
+        local Indicator = Instance.new("Frame")
+        Indicator.Size = UDim2.new(1, 0, 0, 2)
+        Indicator.Position = UDim2.new(0, 0, 1, -2)
+        Indicator.BackgroundColor3 = TabColor
+        Indicator.BorderSizePixel = 0
+        Indicator.BackgroundTransparency = 1
+        Indicator.Parent = TabBtn
+
+        local TabData = {Button = TabBtn, Container = Container, Indicator = Indicator}
+        table.insert(VentyLib.Tabs, TabData)
+        local tabIndex = #VentyLib.Tabs
+        TabBtn.MouseButton1Click:Connect(function() VentyLib:SelectTab(tabIndex) end)
+
+        local TabFunctions = {}
+        
+        function TabFunctions:AddSection(SConfig)
+            local SectionFrame = Instance.new("Frame")
+            SectionFrame.Size = UDim2.new(1, 0, 0, 25)
+            SectionFrame.BackgroundTransparency = 1
+            SectionFrame.Parent = Container
+            local AccentBar = Instance.new("Frame")
+            AccentBar.Size = UDim2.new(0, 2, 0, 14)
+            AccentBar.Position = UDim2.new(0, 0, 0.5, -7)
+            AccentBar.BackgroundColor3 = SConfig.Color or Color3.fromRGB(255, 255, 255)
+            AccentBar.BorderSizePixel = 0
+            AccentBar.Parent = SectionFrame
+            local SectionLabel = Instance.new("TextLabel")
+            SectionLabel.Size = UDim2.new(1, -20, 1, 0)
+            SectionLabel.Position = UDim2.new(0, 10, 0, 0)
+            SectionLabel.BackgroundTransparency = 1
+            SectionLabel.Text = SConfig.Name:upper()
+            SectionLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+            SectionLabel.Font = Enum.Font.GothamBold
+            SectionLabel.TextSize = 10
+            SectionLabel.TextXAlignment = Enum.TextXAlignment.Left
+            SectionLabel.Parent = SectionFrame
+            return TabFunctions
+        end
+
+        function TabFunctions:AddLabel(LConfig)
+            local LabelFrame = Instance.new("Frame")
+            LabelFrame.Size = UDim2.new(1, -5, 0, 45)
+            LabelFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+            LabelFrame.Parent = Container
+            Instance.new("UICorner", LabelFrame).CornerRadius = UDim.new(0, 6)
+
+            local Title = Instance.new("TextLabel", LabelFrame)
+            Title.Size = UDim2.new(1, -24, 0, 20)
+            Title.Position = UDim2.new(0, 12, 0, 6)
+            Title.BackgroundTransparency = 1
+            Title.Text = LConfig.Name or "Label"
+            Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+            Title.Font = Enum.Font.GothamBold
+            Title.TextSize = 13
+            Title.TextXAlignment = Enum.TextXAlignment.Left
+
+            local Description = Instance.new("TextLabel", LabelFrame)
+            Description.Size = UDim2.new(1, -24, 0, 15)
+            Description.Position = UDim2.new(0, 12, 0, 24)
+            Description.BackgroundTransparency = 1
+            Description.Text = LConfig.Text or "Text"
+            Description.TextColor3 = Color3.fromRGB(180, 180, 180)
+            Description.Font = Enum.Font.Gotham
+            Description.TextSize = 11
+            Description.TextXAlignment = Enum.TextXAlignment.Left
+            Description.TextWrapped = true
+            Description.Parent = LabelFrame
+
+            return { SetText = function(_, new) Description.Text = new end }
+        end
+
+        function TabFunctions:AddToggle(TConfig)
+            local Toggled = TConfig.Default or false
+            local ToggleColor = TConfig.Color or Color3.fromRGB(76, 217, 100)
+            local ToggleBtn = Instance.new("TextButton")
+            ToggleBtn.Size = UDim2.new(1, -5, 0, 38)
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+            ToggleBtn.Text = ""
+            ToggleBtn.AutoButtonColor = false
+            ToggleBtn.Parent = Container
+            Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 6)
+
+            local Label = Instance.new("TextLabel", ToggleBtn)
+            Label.Size = UDim2.new(1, -60, 1, 0)
+            Label.Position = UDim2.new(0, 12, 0, 0)
+            Label.BackgroundTransparency = 1
+            Label.Text = TConfig.Name
+            Label.TextColor3 = Color3.fromRGB(220, 220, 220)
+            Label.Font = Enum.Font.Gotham
+            Label.TextSize = 13
+            Label.TextXAlignment = Enum.TextXAlignment.Left
+
+            local Switch = Instance.new("Frame", ToggleBtn)
+            Switch.Size = UDim2.new(0, 36, 0, 20)
+            Switch.Position = UDim2.new(1, -48, 0.5, -10)
+            Switch.BackgroundColor3 = Toggled and ToggleColor or Color3.fromRGB(60, 60, 60)
+            Instance.new("UICorner", Switch).CornerRadius = UDim.new(1, 0)
+
+            local Dot = Instance.new("Frame", Switch)
+            Dot.Size = UDim2.new(0, 16, 0, 16)
+            Dot.Position = Toggled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+            Dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            Instance.new("UICorner", Dot).CornerRadius = UDim.new(1, 0)
+
+            ToggleBtn.MouseButton1Click:Connect(function()
+                Toggled = not Toggled
+                TweenService:Create(Dot, TweenInfo.new(0.25), {Position = Toggled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)}):Play()
+                TweenService:Create(Switch, TweenInfo.new(0.2), {BackgroundColor3 = Toggled and ToggleColor or Color3.fromRGB(60, 60, 60)}):Play()
+                TConfig.Callback(Toggled)
+            end)
+            return TabFunctions
+        end
+
+        function TabFunctions:AddSlider(SConfig)
+            local Min, Max, Def = SConfig.Minimal or 0, SConfig.Maximum or 100, SConfig.Default or 0
+            local SliderColor = SConfig.Color or Color3.fromRGB(0, 150, 255)
+            
+            local SliderHolder = Instance.new("Frame")
+            SliderHolder.Size = UDim2.new(1, -5, 0, 42)
+            SliderHolder.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+            SliderHolder.Parent = Container
+            Instance.new("UICorner", SliderHolder).CornerRadius = UDim.new(0, 6)
+
+            local SliderLabel = Instance.new("TextLabel", SliderHolder)
+            SliderLabel.Size = UDim2.new(1, -20, 0, 18)
+            SliderLabel.Position = UDim2.new(0, 12, 0, 4)
+            SliderLabel.BackgroundTransparency = 1
+            SliderLabel.Text = SConfig.Name
+            SliderLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+            SliderLabel.Font = Enum.Font.GothamBold
+            SliderLabel.TextSize = 13
+            SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+            local ValueLabel = Instance.new("TextLabel", SliderHolder)
+            ValueLabel.Size = UDim2.new(0, 60, 0, 18)
+            ValueLabel.Position = UDim2.new(1, -72, 0, 4)
+            ValueLabel.BackgroundTransparency = 1
+            ValueLabel.Text = tostring(Def) .. (SConfig.Increment or "")
+            ValueLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+            ValueLabel.Font = Enum.Font.Gotham
+            ValueLabel.TextSize = 12
+            ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+
+            local SliderBarBG = Instance.new("TextButton", SliderHolder)
+            SliderBarBG.Size = UDim2.new(1, -24, 0, 12)
+            SliderBarBG.Position = UDim2.new(0, 12, 0, 24)
+            SliderBarBG.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            SliderBarBG.Text = ""
+            SliderBarBG.AutoButtonColor = false
+            Instance.new("UICorner", SliderBarBG).CornerRadius = UDim.new(1, 0)
+
+            local SliderBarFill = Instance.new("Frame", SliderBarBG)
+            SliderBarFill.Size = UDim2.new((Def - Min) / (Max - Min), 0, 1, 0)
+            SliderBarFill.BackgroundColor3 = SliderColor
+            SliderBarFill.BorderSizePixel = 0
+            Instance.new("UICorner", SliderBarFill).CornerRadius = UDim.new(1, 0)
+
+            local function UpdateSlider(input)
+                local pos = math.clamp((input.Position.X - SliderBarBG.AbsolutePosition.X) / SliderBarBG.AbsoluteSize.X, 0, 1)
+                local val = math.floor(Min + (Max - Min) * pos)
+                SliderBarFill.Size = UDim2.new(pos, 0, 1, 0)
+                ValueLabel.Text = tostring(val) .. (SConfig.Increment or "")
+                SConfig.Callback(val)
+            end
+
+            local Dragging = false
+            SliderBarBG.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then Dragging = true UpdateSlider(input) end
+            end)
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then Dragging = false end
+            end)
+            UserInputService.InputChanged:Connect(function(input)
+                if Dragging and input.UserInputType == Enum.UserInputType.MouseMovement then UpdateSlider(input) end
+            end)
+            return TabFunctions
+        end
+
+        function TabFunctions:AddBind(KConfig)
+            local BindName = KConfig.Name or "Keybind"
+            local CurrentBind = KConfig.Default or Enum.KeyCode.F
+            if typeof(CurrentBind) == "string" then CurrentBind = Enum.KeyCode[CurrentBind] end
+            
+            local Binding = false
+            local BindFrame = Instance.new("Frame")
+            BindFrame.Size = UDim2.new(1, -5, 0, 38)
+            BindFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+            BindFrame.Parent = Container
+            Instance.new("UICorner", BindFrame).CornerRadius = UDim.new(0, 6)
+
+            local Label = Instance.new("TextLabel", BindFrame)
+            Label.Size = UDim2.new(1, -70, 1, 0)
+            Label.Position = UDim2.new(0, 12, 0, 0)
+            Label.BackgroundTransparency = 1
+            Label.Text = BindName
+            Label.TextColor3 = Color3.fromRGB(220, 220, 220)
+            Label.Font = Enum.Font.Gotham
+            Label.TextSize = 13
+            Label.TextXAlignment = Enum.TextXAlignment.Left
+
+            local BindButton = Instance.new("TextButton", BindFrame)
+            BindButton.Size = UDim2.new(0, 60, 0, 22)
+            BindButton.Position = UDim2.new(1, -72, 0.5, -11)
+            BindButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+            BindButton.Text = CurrentBind.Name
+            BindButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            BindButton.Font = Enum.Font.GothamBold
+            BindButton.TextSize = 11
+            Instance.new("UICorner", BindButton).CornerRadius = UDim.new(0, 4)
+
+            BindButton.MouseButton1Click:Connect(function()
+                Binding = true
+                VentyLib.IsListening = true
+                BindButton.Text = "..."
+                BindButton.TextColor3 = Color3.fromRGB(255, 200, 50)
+            end)
+
+            UserInputService.InputBegan:Connect(function(input, gp)
+                if Binding and input.UserInputType == Enum.UserInputType.Keyboard then
+                    if input.KeyCode ~= Enum.KeyCode.Escape then
+                        CurrentBind = input.KeyCode
+                        BindButton.Text = input.KeyCode.Name
+                    end
+                    BindButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    Binding = false
+                    task.wait(0.1)
+                    VentyLib.IsListening = false
+                elseif not gp and CurrentBind and input.KeyCode == CurrentBind and not Binding then
+                    KConfig.Callback()
+                end
+            end)
+            return TabFunctions
+        end
+
+        if #VentyLib.Tabs == 1 then VentyLib:SelectTab(1) end
+        return TabFunctions
+    end
+
+    return self
+end
+
+function VentyLib:SelectTab(index)
+    self.CurrentTabIndex = index
+    for i, tab in ipairs(self.Tabs) do
+        local isSelected = (i == index)
+        tab.Container.Visible = isSelected
+        TweenService:Create(tab.Button, TweenInfo.new(0.2), {
+            TextColor3 = isSelected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(130, 130, 130)
+        }):Play()
+        TweenService:Create(tab.Indicator, TweenInfo.new(0.2), {
+            BackgroundTransparency = isSelected and 0 or 1
+        }):Play()
+    end
+end
