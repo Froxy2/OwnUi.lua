@@ -13,34 +13,59 @@ local VentyLib = {
     IsListening = false 
 }
 
+-- // Hilfsfunktion für Dragging (Damit man die UI verschieben kann)
+local function MakeDraggable(gui)
+    local dragging, dragInput, dragStart, startPos
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = gui.Position
+        end
+    end)
+    gui.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
 -- // Create Window Funktion
 function VentyLib:CreateWindow(Config)
     local WindowName = Config.Name or "Venty UI"
-    local UserTrans = Config.BackgroundTransparency or 1
-    local ActualTrans = 1 - math.clamp(UserTrans, 0, 1)
+    local UserTrans = Config.BackgroundTransparency or 0
+    local ActualTrans = math.clamp(UserTrans, 0, 1)
 
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "VentyLib_UI"
-    ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    ScreenGui.Parent = (RunService:IsStudio() and game.Players.LocalPlayer:WaitForChild("PlayerGui") or game:GetService("CoreGui"))
     ScreenGui.ResetOnSpawn = false
     self.Gui = ScreenGui
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainFrame"
     MainFrame.Size = UDim2.new(0, 350, 0, 450) 
-    MainFrame.Position = UDim2.new(0, 10, 0, 40) 
+    MainFrame.Position = UDim2.new(0.5, -175, 0.5, -225) 
     MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     MainFrame.BackgroundTransparency = ActualTrans
     MainFrame.BorderSizePixel = 0
-    MainFrame.ClipsDescendants = true -- Wichtig für das Minimieren!
+    MainFrame.ClipsDescendants = true
     MainFrame.Parent = ScreenGui
     self.MainFrame = MainFrame
+    
+    MakeDraggable(MainFrame)
 
     Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
     local Stroke = Instance.new("UIStroke", MainFrame)
     Stroke.Thickness = 1
     Stroke.Color = Color3.fromRGB(40, 40, 40)
-    Stroke.Transparency = ActualTrans
+    Stroke.Transparency = 0
 
     local HeaderLayout = Instance.new("UIListLayout", MainFrame)
     HeaderLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -117,12 +142,10 @@ function VentyLib:CreateWindow(Config)
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = TargetSize}):Play()
 
         if IsMinimized then
-            -- Verstecke Inhalt sofort beim Minimieren
             BannerContainer.Visible = false
             TabHolder.Visible = false
             ContainerHolder.Visible = false
         else
-            -- Zeige Inhalt erst kurz nach Start der Animation
             task.wait(0.1)
             BannerContainer.Visible = true
             TabHolder.Visible = true
@@ -185,7 +208,10 @@ function VentyLib:CreateWindow(Config)
         local TabData = {Button = TabBtn, Container = Container, Indicator = Indicator}
         table.insert(VentyLib.Tabs, TabData)
         local tabIndex = #VentyLib.Tabs
-        TabBtn.MouseButton1Click:Connect(function() VentyLib:SelectTab(tabIndex) end)
+        
+        TabBtn.MouseButton1Click:Connect(function() 
+            VentyLib:SelectTab(tabIndex) 
+        end)
 
         local TabFunctions = {}
         
@@ -211,38 +237,6 @@ function VentyLib:CreateWindow(Config)
             SectionLabel.TextXAlignment = Enum.TextXAlignment.Left
             SectionLabel.Parent = SectionFrame
             return TabFunctions
-        end
-
-        function TabFunctions:AddLabel(LConfig)
-            local LabelFrame = Instance.new("Frame")
-            LabelFrame.Size = UDim2.new(1, -5, 0, 45)
-            LabelFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-            LabelFrame.Parent = Container
-            Instance.new("UICorner", LabelFrame).CornerRadius = UDim.new(0, 6)
-
-            local Title = Instance.new("TextLabel", LabelFrame)
-            Title.Size = UDim2.new(1, -24, 0, 20)
-            Title.Position = UDim2.new(0, 12, 0, 6)
-            Title.BackgroundTransparency = 1
-            Title.Text = LConfig.Name or "Label"
-            Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-            Title.Font = Enum.Font.GothamBold
-            Title.TextSize = 13
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-
-            local Description = Instance.new("TextLabel", LabelFrame)
-            Description.Size = UDim2.new(1, -24, 0, 15)
-            Description.Position = UDim2.new(0, 12, 0, 24)
-            Description.BackgroundTransparency = 1
-            Description.Text = LConfig.Text or "Text"
-            Description.TextColor3 = Color3.fromRGB(180, 180, 180)
-            Description.Font = Enum.Font.Gotham
-            Description.TextSize = 11
-            Description.TextXAlignment = Enum.TextXAlignment.Left
-            Description.TextWrapped = true
-            Description.Parent = LabelFrame
-
-            return { SetText = function(_, new) Description.Text = new end }
         end
 
         function TabFunctions:AddToggle(TConfig)
@@ -352,63 +346,13 @@ function VentyLib:CreateWindow(Config)
             return TabFunctions
         end
 
-        function TabFunctions:AddBind(KConfig)
-            local BindName = KConfig.Name or "Keybind"
-            local CurrentBind = KConfig.Default or Enum.KeyCode.F
-            if typeof(CurrentBind) == "string" then CurrentBind = Enum.KeyCode[CurrentBind] end
-            
-            local Binding = false
-            local BindFrame = Instance.new("Frame")
-            BindFrame.Size = UDim2.new(1, -5, 0, 38)
-            BindFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-            BindFrame.Parent = Container
-            Instance.new("UICorner", BindFrame).CornerRadius = UDim.new(0, 6)
-
-            local Label = Instance.new("TextLabel", BindFrame)
-            Label.Size = UDim2.new(1, -70, 1, 0)
-            Label.Position = UDim2.new(0, 12, 0, 0)
-            Label.BackgroundTransparency = 1
-            Label.Text = BindName
-            Label.TextColor3 = Color3.fromRGB(220, 220, 220)
-            Label.Font = Enum.Font.Gotham
-            Label.TextSize = 13
-            Label.TextXAlignment = Enum.TextXAlignment.Left
-
-            local BindButton = Instance.new("TextButton", BindFrame)
-            BindButton.Size = UDim2.new(0, 60, 0, 22)
-            BindButton.Position = UDim2.new(1, -72, 0.5, -11)
-            BindButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-            BindButton.Text = CurrentBind.Name
-            BindButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-            BindButton.Font = Enum.Font.GothamBold
-            BindButton.TextSize = 11
-            Instance.new("UICorner", BindButton).CornerRadius = UDim.new(0, 4)
-
-            BindButton.MouseButton1Click:Connect(function()
-                Binding = true
-                VentyLib.IsListening = true
-                BindButton.Text = "..."
-                BindButton.TextColor3 = Color3.fromRGB(255, 200, 50)
+        -- Auto-Select first Tab
+        if #VentyLib.Tabs == 1 then
+            task.spawn(function()
+                VentyLib:SelectTab(1)
             end)
-
-            UserInputService.InputBegan:Connect(function(input, gp)
-                if Binding and input.UserInputType == Enum.UserInputType.Keyboard then
-                    if input.KeyCode ~= Enum.KeyCode.Escape then
-                        CurrentBind = input.KeyCode
-                        BindButton.Text = input.KeyCode.Name
-                    end
-                    BindButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    Binding = false
-                    task.wait(0.1)
-                    VentyLib.IsListening = false
-                elseif not gp and CurrentBind and input.KeyCode == CurrentBind and not Binding then
-                    KConfig.Callback()
-                end
-            end)
-            return TabFunctions
         end
 
-        if #VentyLib.Tabs == 1 then VentyLib:SelectTab(1) end
         return TabFunctions
     end
 
@@ -428,3 +372,6 @@ function VentyLib:SelectTab(index)
         }):Play()
     end
 end
+
+-- // DAS HIER IST DER WICHTIGSTE TEIL // --
+return VentyLib
